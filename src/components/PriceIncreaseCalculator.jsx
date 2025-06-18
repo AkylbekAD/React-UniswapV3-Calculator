@@ -31,14 +31,22 @@ const PriceIncreaseCalculator = () => {
 		});
 	};
 
+	const sqrtToPrice = (sqrtX96, decimals0, decimals1, token0IsInput) => {
+		const numerator = BigInt(sqrtX96) * BigInt(sqrtX96);
+		const denominator = 2n ** 192n;
+		const shift = 10 ** (decimals0 - decimals1);
+		const ratio = Number(numerator) / Number(denominator);
+		const adjusted = ratio * shift;
+		return token0IsInput ? adjusted : 1 / adjusted;
+	};
+
 	const calculatePriceIncrease = async () => {
 		setLoading(true);
 		setResult("Загрузка...\n");
 
 		try {
 			const net = NETWORKS[network];
-			const url = net.URL;
-			const provider = new ethers.providers.JsonRpcProvider(url);
+			const provider = new ethers.providers.JsonRpcProvider(net.URL);
 
 			const factory = new ethers.Contract(
 				net.FACTORY_ADDRESS,
@@ -70,133 +78,40 @@ const PriceIncreaseCalculator = () => {
 				provider
 			);
 
-			const sqrtToPrice = (sqrtX96, decimals0, decimals1, token0IsInput) => {
-				const numerator = sqrtX96 * sqrtX96;
-				const denominator = 2n ** 192n;
-				let ratio = Number(numerator) / Number(denominator);
-				const decimalShift = 10 ** (decimals0 - decimals1);
-				ratio *= decimalShift;
-				return token0IsInput ? ratio : 1 / ratio;
-			};
-
-			// Get accurate price using quoter with small test amounts
-			const getAccuratePrice = async (
-				quoter,
-				tokenIn,
-				tokenOut,
-				feeAmount,
-				decimalsIn,
-				decimalsOut,
-				slippagePercent = 0.5
-			) => {
+			const getAccuratePrice = async (tokenIn, tokenOut, decIn, decOut) => {
 				try {
-					// Use 1 token as test amount
-					const testAmount = ethers.utils.parseUnits("1", decimalsIn);
-
+					const amount = ethers.utils.parseUnits("1", decIn);
 					const params = {
-						tokenIn: tokenIn,
-						tokenOut: tokenOut,
-						fee: parseInt(feeAmount),
-						amountIn: testAmount,
+						tokenIn,
+						tokenOut,
+						fee: parseInt(fee),
+						amountIn: amount,
 						sqrtPriceLimitX96: 0,
 					};
-
 					const quote = await quoter.callStatic.quoteExactInputSingle(params);
-					const outputAmount = ethers.utils.formatUnits(
-						quote.amountOut,
-						decimalsOut
-					);
-					const rawPrice = parseFloat(outputAmount);
-
-					// Apply slippage consideration like Uniswap interface
-					const priceWithSlippage = rawPrice * (1 - slippagePercent / 100);
-
-					return {
-						rawPrice,
-						priceWithSlippage,
-						sqrtPriceAfter: quote.sqrtPriceX96After,
-					};
-				} catch (error) {
-					console.error("Error getting accurate price:", error);
+					return parseFloat(ethers.utils.formatUnits(quote.amountOut, decOut));
+				} catch {
 					return null;
 				}
 			};
 
-			// Get bidirectional pricing for better accuracy
-			const getBidirectionalPrice = async (
-				quoter,
-				token0Addr,
-				token1Addr,
-				feeAmount,
-				decimals0,
-				decimals1
-			) => {
-				try {
-					// Get price in both directions
-					const price0to1 = await getAccuratePrice(
-						quoter,
-						token0Addr,
-						token1Addr,
-						feeAmount,
-						decimals0,
-						decimals1
-					);
-					const price1to0 = await getAccuratePrice(
-						quoter,
-						token1Addr,
-						token0Addr,
-						feeAmount,
-						decimals1,
-						decimals0
-					);
-
-					if (!price0to1 || !price1to0) {
-						return null;
-					}
-
-					// Calculate inverse of the reverse price
-					const price1to0Inverse = 1 / price1to0.rawPrice;
-
-					// Average the prices for better accuracy
-					const averageRawPrice = (price0to1.rawPrice + price1to0Inverse) / 2;
-					const averagePriceWithSlippage =
-						(price0to1.priceWithSlippage + price1to0Inverse * 0.995) / 2;
-
-					return {
-						price0to1: price0to1.rawPrice,
-						price1to0Inverse: price1to0Inverse,
-						averageRawPrice,
-						averagePriceWithSlippage,
-						priceWithSlippage: averagePriceWithSlippage,
-					};
-				} catch (error) {
-					console.error("Error getting bidirectional price:", error);
-					return null;
-				}
-			};
-
-			// Get accurate pricing using quoter
-			const bidirectionalPricing = await getBidirectionalPrice(
-				quoter,
+			const price0to1 = await getAccuratePrice(
 				token0,
 				token1,
-				fee,
 				decimals0,
 				decimals1
 			);
-
-			// Use the most accurate price (quoter-based with slippage consideration)
-			let currentPrice;
-			if (bidirectionalPricing) {
-				currentPrice =
-					token0 === token0Address
-						? bidirectionalPricing.priceWithSlippage
-						: 1 / bidirectionalPricing.priceWithSlippage;
-			} else {
-				setResult("Ошибка при получении цены пула");
+			const price1to0 = await getAccuratePrice(
+				token1,
+				token0,
+				decimals1,
+				decimals0
+			);
+			if (!price0to1 || !price1to0) {
+				setResult("Ошибка получения цены");
 				return;
 			}
-
+			const currentPrice = (price0to1 + 1 / price1to0) / 2;
 			const desiredPrice = parseFloat(targetPrice);
 
 			if (isNaN(desiredPrice) || desiredPrice <= currentPrice) {
@@ -204,22 +119,21 @@ const PriceIncreaseCalculator = () => {
 				return;
 			}
 
-			let output = `📊 Текущая цена: 1 ${token0Name} = ${formatFullDecimal(
-				currentPrice,
-				18
+			let output = `📊 Текущая цена: 1 ${token0Name} = ${currentPrice.toPrecision(
+				8
 			)} ${token1Name}\n`;
 			output += `🎯 Целевая цена: 1 ${token0Name} = ${desiredPrice} ${token1Name}\n`;
 
 			const simulate = async (amount) => {
-				const parsedAmount = ethers.utils.parseUnits(amount.toString(), decimals1);
-				const params = {
-					tokenIn: token1,
-					tokenOut: token0,
-					fee: parseInt(fee),
-					amountIn: parsedAmount,
-					sqrtPriceLimitX96: 0,
-				};
 				try {
+					const parsedAmount = ethers.utils.parseUnits(amount.toString(), decimals1);
+					const params = {
+						tokenIn: token1,
+						tokenOut: token0,
+						fee: parseInt(fee),
+						amountIn: parsedAmount,
+						sqrtPriceLimitX96: 0,
+					};
 					const quote = await quoter.callStatic.quoteExactInputSingle(params);
 					const newPrice = sqrtToPrice(
 						BigInt(quote.sqrtPriceX96After.toString()),
@@ -233,34 +147,38 @@ const PriceIncreaseCalculator = () => {
 				}
 			};
 
-			let min = 1_000;
-			let max = 10_000_000;
+			let min = 1;
+			let max = 1_000_000_000;
 			let bestAmount = 0;
 			let iterations = 0;
+
 			while (min < max && iterations < 30) {
 				const testAmount = (min + max) / 2;
 				const simulatedPrice = await simulate(testAmount);
-				if (!simulatedPrice) {
+
+				if (!simulatedPrice || !isFinite(simulatedPrice)) {
 					output += `🔍 Swap try №${iterations + 1}: ${testAmount.toFixed(
 						0
-					)} ${token1Name} → ошибка (симуляция не удалась)\n`;
+					)} ${token1Name} → ошибка\n`;
 					max = testAmount;
 					iterations++;
 					continue;
 				}
+
 				const errorPercent =
 					(Math.abs(simulatedPrice - desiredPrice) / desiredPrice) * 100;
 				output += `🔍 Swap try №${iterations + 1}: ${testAmount.toFixed(
 					0
-				)} ${token1Name} → цена ${simulatedPrice.toFixed(
+				)} ${token1Name} → цена ${simulatedPrice.toPrecision(
 					6
 				)} (δ = ${errorPercent.toFixed(2)}%)\n`;
+
 				if (errorPercent < 0.1) {
 					bestAmount = testAmount;
 					break;
 				}
 				if (simulatedPrice < desiredPrice) {
-					bestAmount = testAmount;
+					bestAmount = testAmount; // сохраняем как лучший
 					min = testAmount + 1;
 				} else {
 					max = testAmount - 1;
@@ -268,13 +186,14 @@ const PriceIncreaseCalculator = () => {
 				iterations++;
 			}
 
+			const finalAmount = bestAmount > 0 ? bestAmount : max;
 			output += `\n💰 Требуется свапнуть ~ ${Math.ceil(
-				bestAmount
+				finalAmount
 			).toLocaleString()} ${token1Name}`;
 			setResult(output);
 		} catch (e) {
 			console.error(e);
-			setResult("Ошибка при расчёте:", e);
+			setResult("Ошибка при расчёте: " + e.message);
 		} finally {
 			setLoading(false);
 		}
