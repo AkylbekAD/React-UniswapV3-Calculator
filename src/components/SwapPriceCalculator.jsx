@@ -1,13 +1,17 @@
 import React, { useState } from "react";
 import { ethers } from "ethers";
 import QuoterV2 from "@uniswap/v3-periphery/artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json";
-const QuoterV2ABI = QuoterV2.abi;
+
 import Pool from "@uniswap/v3-core/artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json";
-const PoolABI = Pool.abi;
+
 import Factory from "@uniswap/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json";
-const FactoryABI = Factory.abi;
+
 import ERC20ABI from "../erc20.json";
 import { NETWORKS } from "../config/net_configs";
+
+const QuoterV2ABI = QuoterV2.abi;
+const PoolABI = Pool.abi;
+const FactoryABI = Factory.abi;
 
 const SwapPriceCalculator = () => {
 	const [token0, setToken0] = useState(

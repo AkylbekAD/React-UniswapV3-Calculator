@@ -1,3 +1,4 @@
+/* global BigInt */
 import React, { useState } from "react";
 import { ethers } from "ethers";
 import Quoter from "@uniswap/v3-periphery/artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json";
