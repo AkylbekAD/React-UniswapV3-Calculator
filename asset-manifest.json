@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/React-UniswapV3-Calculator/static/css/main.5608c396.css",
+    "main.js": "/React-UniswapV3-Calculator/static/js/main.28268ed0.js",
+    "index.html": "/React-UniswapV3-Calculator/index.html",
+    "main.5608c396.css.map": "/React-UniswapV3-Calculator/static/css/main.5608c396.css.map",
+    "main.28268ed0.js.map": "/React-UniswapV3-Calculator/static/js/main.28268ed0.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.5608c396.css",
+    "static/js/main.28268ed0.js"
+  ]
+}
