@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/React-UniswapV3-Calculator/static/css/main.5608c396.css",
-    "main.js": "/React-UniswapV3-Calculator/static/js/main.28268ed0.js",
+    "main.js": "/React-UniswapV3-Calculator/static/js/main.cb4e662c.js",
     "index.html": "/React-UniswapV3-Calculator/index.html",
     "main.5608c396.css.map": "/React-UniswapV3-Calculator/static/css/main.5608c396.css.map",
-    "main.28268ed0.js.map": "/React-UniswapV3-Calculator/static/js/main.28268ed0.js.map"
+    "main.cb4e662c.js.map": "/React-UniswapV3-Calculator/static/js/main.cb4e662c.js.map"
   },
   "entrypoints": [
     "static/css/main.5608c396.css",
-    "static/js/main.28268ed0.js"
+    "static/js/main.cb4e662c.js"
   ]
 }
